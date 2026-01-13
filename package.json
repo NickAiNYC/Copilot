@@ -7,11 +7,14 @@
     "dev": "webpack --mode development --watch",
     "build": "webpack --mode production",
     "clean": "rm -rf dist",
-    "rebuild": "npm run clean && npm run build"
+    "rebuild": "npm run clean && npm run build",
+    "test": "echo \"No tests yet\" && exit 0",
+    "lint": "echo \"No linter yet\" && exit 0"
   },
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "styled-components": "^6.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",
@@ -28,5 +31,14 @@
   "engines": {
     "node": ">=16.0.0",
     "npm": ">=8.0.0"
-  }
+  },
+  "keywords": [
+    "chrome-extension",
+    "whatsapp",
+    "luxury-watches",
+    "productivity",
+    "ai"
+  ],
+  "author": "Dealer Copilot Team",
+  "license": "Proprietary"
 }
