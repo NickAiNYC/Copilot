@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Dealer Copilot</title>
+  <style>
+    body {
+      width: 320px;
+      min-height: 200px;
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e293b;
+      color: #fff;
+    }
+    h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+    }
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px;
+      background: #0f172a;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .stat-label {
+      color: #94a3b8;
+      font-size: 13px;
+    }
+    .stat-value {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 12px;
+      border: none;
+      border-radius: 6px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button.secondary {
+      background: #64748b;
+      margin-top: 8px;
+    }
+    button.secondary:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body>
+  <h2>⌚ Dealer Copilot</h2>
+  
+  <div class="stat">
+    <span class="stat-label">Listings This Month</span>
+    <span class="stat-value" id="listings-count">-</span>
+  </div>
+  
+  <div class="stat">
+    <span class="stat-label">Subscription</span>
+    <span class="stat-value" id="tier">-</span>
+  </div>
+  
+  <button id="open-whatsapp">Open WhatsApp Web</button>
+  <button id="open-settings" class="secondary">Settings</button>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
