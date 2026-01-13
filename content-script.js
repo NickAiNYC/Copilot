@@ -1,112 +1,196 @@
-// content-script.js - Injected into WhatsApp Web
-// This script creates the sidebar and handles communication
+// content-script.js - WhatsApp Web injection for Dealer Copilot
+// Injects sidebar and handles communication between UI and extension
 
-console.log('[Copilot] Content script loaded on WhatsApp Web');
+console.log('[Dealer Copilot] Content script loaded on WhatsApp Web');
 
+// ==================== GLOBAL STATE ====================
 let sidebarInjected = false;
 let sidebarIframe = null;
+let isWhatsAppLoaded = false;
 
-// Wait for WhatsApp to fully load
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-
-function init() {
-  console.log('[Copilot] Initializing on WhatsApp Web');
+// ==================== MAIN INITIALIZATION ====================
+(function initialize() {
+  console.log('[Dealer Copilot] Initializing content script');
   
-  // Wait a bit for WhatsApp's React to stabilize
-  setTimeout(() => {
-    injectSidebar();
-    setupMessageBridge();
-    setupClipboardHandler();
-  }, 2000);
+  // Wait for WhatsApp to fully load
+  waitForWhatsAppLoad().then(() => {
+    console.log('[Dealer Copilot] WhatsApp Web detected as loaded');
+    isWhatsAppLoaded = true;
+    
+    // Inject sidebar after a short delay
+    setTimeout(() => {
+      injectSidebar();
+      setupMessageBridge();
+      setupClipboardHandler();
+      setupGroupDetection();
+    }, 1500);
+  }).catch(error => {
+    console.error('[Dealer Copilot] Failed to detect WhatsApp:', error);
+  });
+})();
+
+// ==================== CORE FUNCTIONS ====================
+
+// Wait for WhatsApp's main UI to load
+async function waitForWhatsAppLoad() {
+  return new Promise((resolve) => {
+    const MAX_WAIT_TIME = 30000; // 30 seconds max
+    const CHECK_INTERVAL = 500;
+    let elapsed = 0;
+    
+    const checkInterval = setInterval(() => {
+      // Check for WhatsApp's main panel
+      const mainPanel = document.querySelector('[data-testid="conversation-panel-wrapper"]') || 
+                       document.querySelector('#main') ||
+                       document.querySelector('div[role="main"]');
+      
+      if (mainPanel) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (elapsed >= MAX_WAIT_TIME) {
+        clearInterval(checkInterval);
+        console.warn('[Dealer Copilot] WhatsApp load timeout');
+        resolve(); // Resolve anyway to try injection
+      }
+      
+      elapsed += CHECK_INTERVAL;
+    }, CHECK_INTERVAL);
+  });
 }
 
-// Inject sidebar iframe
+// Inject the sidebar iframe into WhatsApp Web
 function injectSidebar() {
   if (sidebarInjected) {
-    console.log('[Copilot] Sidebar already injected');
+    console.log('[Dealer Copilot] Sidebar already injected');
     return;
   }
   
-  // Create container
-  const container = document.createElement('div');
-  container.id = 'dealer-copilot-root';
-  container.style.cssText = `
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 400px;
-    height: 100vh;
-    z-index: 999999;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
-    background: #1e293b;
-    border-left: 1px solid #334155;
-    overflow: hidden;
-  `;
-  
-  // Create iframe for isolated React app
-  sidebarIframe = document.createElement('iframe');
-  sidebarIframe.id = 'dealer-copilot-sidebar';
-  sidebarIframe.src = chrome.runtime.getURL('sidebar.html');
-  sidebarIframe.style.cssText = `
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
-  `;
-  
-  container.appendChild(sidebarIframe);
-  document.body.appendChild(container);
-  
-  sidebarInjected = true;
-  console.log('[Copilot] Sidebar injected successfully');
+  try {
+    // Create main container
+    const container = document.createElement('div');
+    container.id = 'dealer-copilot-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 400px;
+      height: 100vh;
+      z-index: 999999;
+      background: #1a1a1a;
+      border-left: 1px solid #2d2d2d;
+      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: transform 0.3s ease;
+    `;
+    
+    // Create iframe for isolated React app
+    sidebarIframe = document.createElement('iframe');
+    sidebarIframe.id = 'dealer-copilot-sidebar';
+    sidebarIframe.src = chrome.runtime.getURL('sidebar.html');
+    sidebarIframe.style.cssText = `
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+    `;
+    
+    container.appendChild(sidebarIframe);
+    document.body.appendChild(container);
+    
+    // Create toggle button
+    const toggleBtn = document.createElement('div');
+    toggleBtn.id = 'copilot-toggle-btn';
+    toggleBtn.style.cssText = `
+      position: fixed;
+      top: 50%;
+      right: 400px;
+      transform: translateY(-50%);
+      background: #667eea;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px 0 0 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999998;
+      box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s ease;
+      font-size: 20px;
+    `;
+    toggleBtn.innerHTML = '💎';
+    toggleBtn.title = 'Toggle Dealer Copilot';
+    
+    toggleBtn.addEventListener('click', () => {
+      const isHidden = container.style.transform === 'translateX(400px)';
+      container.style.transform = isHidden ? 'translateX(0)' : 'translateX(400px)';
+      toggleBtn.style.right = isHidden ? '400px' : '0px';
+      toggleBtn.innerHTML = isHidden ? '💎' : '←';
+      
+      // Notify React app
+      if (sidebarIframe.contentWindow) {
+        sidebarIframe.contentWindow.postMessage({
+          type: 'COPILOT_SIDEBAR_VISIBILITY',
+          visible: !isHidden
+        }, '*');
+      }
+    });
+    
+    document.body.appendChild(toggleBtn);
+    
+    sidebarInjected = true;
+    console.log('[Dealer Copilot] Sidebar injected successfully');
+    
+  } catch (error) {
+    console.error('[Dealer Copilot] Failed to inject sidebar:', error);
+  }
 }
 
-// Setup message bridge between iframe and background
+// Setup bidirectional message bridge
 function setupMessageBridge() {
-  // Listen to messages from sidebar iframe
+  // Listen for messages FROM sidebar (React app)
   window.addEventListener('message', async (event) => {
-    // Security: Only accept messages from our iframe
-    if (event.source !== sidebarIframe?.contentWindow) {
-      return;
-    }
+    // Security check: only accept messages from our iframe
+    if (event.source !== sidebarIframe?.contentWindow) return;
     
     const { type, payload } = event.data;
+    if (!type?.startsWith('COPILOT_')) return;
     
-    if (!type || !type.startsWith('COPILOT_')) {
-      return;
-    }
+    console.log('[Dealer Copilot] Message from sidebar:', type);
     
-    console.log('[Copilot] Message from sidebar:', type);
-    
-    switch (type) {
-      case 'COPILOT_COPY_TO_CLIPBOARD':
-        await handleCopyToClipboard(payload);
-        break;
-        
-      case 'COPILOT_FOCUS_WHATSAPP':
-        handleFocusWhatsApp();
-        break;
-        
-      case 'COPILOT_GET_GROUPS':
-        await handleGetGroups();
-        break;
-        
-      case 'COPILOT_TRACK_POST':
-        await handleTrackPost(payload);
-        break;
-        
-      default:
-        console.warn('[Copilot] Unknown message type:', type);
+    try {
+      switch (type) {
+        case 'COPILOT_COPY_TO_CLIPBOARD':
+          await handleCopyToClipboard(payload);
+          break;
+          
+        case 'COPILOT_GET_GROUPS':
+          await handleGetGroups();
+          break;
+          
+        case 'COPILOT_TRACK_POST':
+          await handleTrackPost(payload);
+          break;
+          
+        case 'COPILOT_FOCUS_WHATSAPP':
+          handleFocusWhatsApp();
+          break;
+          
+        default:
+          console.warn('[Dealer Copilot] Unknown message type:', type);
+      }
+    } catch (error) {
+      console.error('[Dealer Copilot] Error handling message:', error);
+      notifySidebar('COPILOT_ERROR', { error: error.message });
     }
   });
   
-  // Listen to messages from background script
+  // Listen for messages FROM background script
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('[Copilot] Message from background:', message.action);
+    console.log('[Dealer Copilot] Message from background:', message.action);
     
     // Forward relevant messages to sidebar
     if (sidebarIframe?.contentWindow) {
@@ -120,143 +204,220 @@ function setupMessageBridge() {
   });
 }
 
-// Handle clipboard copy
+// Handle clipboard copy requests
 async function handleCopyToClipboard(data) {
   try {
-    const { text } = data;
+    const { text, listingId, groupName } = data;
+    
+    if (!text) {
+      throw new Error('No text provided to copy');
+    }
     
     // Use modern Clipboard API
     await navigator.clipboard.writeText(text);
+    console.log('[Dealer Copilot] Text copied to clipboard');
     
-    console.log('[Copilot] Text copied to clipboard');
+    // Show success notification
+    showNotification('✓ Copied to clipboard!', 'success');
     
     // Notify sidebar of success
-    sidebarIframe.contentWindow.postMessage({
-      type: 'COPILOT_CLIPBOARD_SUCCESS',
-      payload: { success: true }
-    }, '*');
+    notifySidebar('COPILOT_CLIPBOARD_SUCCESS', {
+      success: true,
+      timestamp: Date.now()
+    });
     
-    // Optional: Show brief notification
-    showNotification('✓ Copied to clipboard');
+    // Auto-focus WhatsApp for immediate pasting
+    setTimeout(() => {
+      window.focus();
+      // Try to focus the message input (non-invasive)
+      const messageInput = document.querySelector('[contenteditable="true"][data-tab="10"]');
+      if (messageInput) {
+        messageInput.focus();
+      }
+    }, 100);
+    
+    // Track the copy event if we have listing data
+    if (listingId && groupName) {
+      chrome.runtime.sendMessage({
+        action: 'TRACK_LISTING_POST',
+        data: {
+          listingId,
+          groupName,
+          timestamp: Date.now(),
+          action: 'copied'
+        }
+      });
+    }
     
   } catch (error) {
-    console.error('[Copilot] Clipboard error:', error);
+    console.error('[Dealer Copilot] Clipboard error:', error);
     
-    sidebarIframe.contentWindow.postMessage({
-      type: 'COPILOT_CLIPBOARD_ERROR',
-      payload: { error: error.message }
-    }, '*');
+    // Show error notification
+    showNotification('✗ Failed to copy', 'error');
+    
+    // Notify sidebar of error
+    notifySidebar('COPILOT_CLIPBOARD_ERROR', {
+      error: error.message,
+      code: error.name
+    });
   }
 }
 
-// Handle focus WhatsApp request
-function handleFocusWhatsApp() {
-  // Just ensure window is focused
-  window.focus();
-  
-  console.log('[Copilot] WhatsApp window focused');
-  
-  sidebarIframe.contentWindow.postMessage({
-    type: 'COPILOT_FOCUS_SUCCESS',
-    payload: { success: true }
-  }, '*');
-}
-
-// Extract group list from WhatsApp (read-only)
+// Extract WhatsApp groups (read-only, non-invasive)
 async function handleGetGroups() {
   try {
     const groups = [];
+    const maxGroups = 50;
     
-    // Find group/chat elements in sidebar
-    // Note: WhatsApp's DOM structure may change - this is a robust approach
-    const chatElements = document.querySelectorAll('[data-testid="cell-frame-title"]');
+    // Multiple selectors for robustness (WhatsApp changes DOM)
+    const selectors = [
+      '[data-testid="cell-frame-title"]',
+      '[data-testid="conversation-info-header-chat-title"]',
+      '[title] span[dir="auto"]',
+      'span[title].selectable-text'
+    ];
     
-    chatElements.forEach((element, index) => {
-      const groupName = element.textContent.trim();
-      if (groupName && index < 50) { // Limit to first 50
-        groups.push({
-          name: groupName,
-          id: `group_${index}`,
-          lastSeen: Date.now()
-        });
+    for (const selector of selectors) {
+      if (groups.length >= maxGroups) break;
+      
+      const elements = document.querySelectorAll(selector);
+      for (const element of elements) {
+        if (groups.length >= maxGroups) break;
+        
+        const text = element.textContent?.trim();
+        if (text && text.length > 0 && !groups.some(g => g.name === text)) {
+          groups.push({
+            name: text,
+            id: `group_${groups.length}`,
+            element: selector,
+            timestamp: Date.now()
+          });
+        }
       }
+    }
+    
+    console.log(`[Dealer Copilot] Found ${groups.length} groups`);
+    
+    // Send groups to sidebar
+    notifySidebar('COPILOT_GROUPS_DATA', {
+      groups: groups.slice(0, 30), // Limit to 30 for UI performance
+      total: groups.length,
+      timestamp: Date.now()
     });
     
-    console.log('[Copilot] Extracted', groups.length, 'groups');
-    
-    // Send back to sidebar
-    sidebarIframe.contentWindow.postMessage({
-      type: 'COPILOT_GROUPS_DATA',
-      payload: { groups }
-    }, '*');
-    
   } catch (error) {
-    console.error('[Copilot] Error getting groups:', error);
-    
-    sidebarIframe.contentWindow.postMessage({
-      type: 'COPILOT_GROUPS_ERROR',
-      payload: { error: error.message }
-    }, '*');
+    console.error('[Dealer Copilot] Error getting groups:', error);
+    notifySidebar('COPILOT_GROUPS_ERROR', { error: error.message });
   }
 }
 
-// Track post to background
+// Track post completion
 async function handleTrackPost(data) {
   try {
     const response = await chrome.runtime.sendMessage({
-      action: 'trackListingPosted',
+      action: 'TRACK_LISTING_POST',
       data
     });
     
-    console.log('[Copilot] Post tracked:', response);
+    console.log('[Dealer Copilot] Post tracked:', response);
     
-    sidebarIframe.contentWindow.postMessage({
-      type: 'COPILOT_TRACK_SUCCESS',
-      payload: response
-    }, '*');
+    notifySidebar('COPILOT_TRACK_SUCCESS', response);
     
   } catch (error) {
-    console.error('[Copilot] Error tracking post:', error);
+    console.error('[Dealer Copilot] Error tracking post:', error);
+    notifySidebar('COPILOT_TRACK_ERROR', { error: error.message });
   }
 }
 
-// Setup clipboard monitoring (optional feature)
+// Focus WhatsApp window
+function handleFocusWhatsApp() {
+  window.focus();
+  notifySidebar('COPILOT_FOCUS_SUCCESS', { success: true });
+}
+
+// Setup clipboard paste detection (optional, non-invasive)
 function setupClipboardHandler() {
-  // Could monitor for paste events to detect when user pastes
-  // This is NON-INVASIVE - we don't modify WhatsApp's behavior
-  document.addEventListener('paste', (e) => {
-    console.log('[Copilot] Paste detected (monitoring only)');
+  // Simply log paste events for analytics (no interception)
+  document.addEventListener('paste', (event) => {
+    console.log('[Dealer Copilot] Paste event detected (read-only monitoring)');
+    
+    // Optional: Send analytics to background
+    chrome.runtime.sendMessage({
+      action: 'TRACK_LISTING_POST',
+      data: {
+        action: 'paste_detected',
+        timestamp: Date.now(),
+        source: 'clipboard_handler'
+      }
+    });
   });
 }
 
+// Setup periodic group detection
+function setupGroupDetection() {
+  // Refresh groups every 30 seconds while sidebar is open
+  setInterval(() => {
+    if (sidebarIframe?.contentWindow) {
+      handleGetGroups();
+    }
+  }, 30000);
+}
+
+// ==================== UTILITY FUNCTIONS ====================
+
+// Send message to sidebar React app
+function notifySidebar(type, payload) {
+  if (sidebarIframe?.contentWindow) {
+    sidebarIframe.contentWindow.postMessage({
+      type,
+      payload
+    }, '*');
+  }
+}
+
 // Show temporary notification
-function showNotification(message) {
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: '#10b981',
+    error: '#ef4444',
+    info: '#3b82f6',
+    warning: '#f59e0b'
+  };
+  
   const notification = document.createElement('div');
   notification.style.cssText = `
     position: fixed;
     top: 20px;
     right: 420px;
-    background: #10b981;
+    background: ${colors[type] || colors.info};
     color: white;
     padding: 12px 20px;
     border-radius: 8px;
-    font-family: system-ui;
+    font-family: system-ui, -apple-system, sans-serif;
     font-size: 14px;
+    font-weight: 500;
     z-index: 9999999;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     animation: slideIn 0.3s ease-out;
+    max-width: 300px;
+    word-wrap: break-word;
   `;
   notification.textContent = message;
   
   document.body.appendChild(notification);
   
+  // Remove after 3 seconds
   setTimeout(() => {
     notification.style.animation = 'slideOut 0.3s ease-in';
-    setTimeout(() => notification.remove(), 300);
-  }, 2000);
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
 }
 
-// Add animation styles
+// Add animation styles for notifications
 const style = document.createElement('style');
 style.textContent = `
   @keyframes slideIn {
@@ -270,4 +431,4 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-console.log('[Copilot] Content script fully initialized');
+console.log('[Dealer Copilot] Content script fully initialized');
